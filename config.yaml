@@ -1,0 +1,32 @@
+# ==========================================
+# FSI Simulation Configuration
+# ==========================================
+
+# 1. Physical Domain & LBM Grid Parameters
+simulation:
+  nx: 500
+  ny: 1000
+  dx_lbm: 0.01          # LBM unit length (m)
+  dt: 0.001             # LBM time step (s)
+  gravity: [0.0, -9.81] # Gravity acceleration
+
+# 2. Fluid Parameters
+fluid:
+  viscosity: 0.01       # Kinematic viscosity nu
+  density: 1.0          # Initial fluid density
+
+# 3. Leaf Geometry & Mass Parameters
+leaf:
+  a: 0.5                # Semi-major axis of the ellipse (half chord length)
+  aspect_ratio: 10.0    # Aspect ratio (a/b)
+  num_pts: 100          # Number of discrete surface points
+  rho: 1.2              # Leaf density
+  com_offset: [0.0, 0.0] # 2D Vector [x_offset, y_offset] relative to geometric center
+  initial_pos: [3.5, 8.0]
+  initial_rot_deg: 0.0
+
+# 4. Visualization & Output Parameters
+output:
+  total_frames: 150     # Total number of frames to simulate and output
+  substeps: 40          # Number of LBM physical substeps per frame
+  output_dir: "output_frames"

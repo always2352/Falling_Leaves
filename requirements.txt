@@ -1,0 +1,14 @@
+# Core libraries for scientific computing and plotting
+numpy
+scipy
+matplotlib
+
+# GPU-accelerated computing library for Python
+warp-lang
+
+# Library for image processing (used for saving GIFs/frames)
+Pillow
+
+imageio[ffmpeg]
+
+pyyaml
