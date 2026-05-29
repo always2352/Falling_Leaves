@@ -3,8 +3,8 @@ import glob
 import imageio
 
 def frames_to_video():
-    image_folder = 'output_frames_shift'  
-    video_name = 'falling_leaf_x_shift.mp4' 
+    image_folder = 'output_frames_horizontal'  
+    video_name = 'falling_leaf_horizontal.mp4' 
     fps = 20                        
     
     search_path = os.path.join(image_folder, "frame_*.png")
@@ -16,11 +16,19 @@ def frames_to_video():
 
     print(f"Found {len(images)} image frames, generating MP4 (FPS={fps})...")
     
-
     writer = imageio.get_writer(video_name, fps=fps, macro_block_size=None)
 
     for img_path in images:
         img = imageio.v2.imread(img_path)
+
+        h, w, c = img.shape
+        if w % 2 != 0:
+            w = w - 1 
+        if h % 2 != 0:
+            h = h - 1
+        
+        img = img[:h, :w]
+
         writer.append_data(img)
         
     writer.close()

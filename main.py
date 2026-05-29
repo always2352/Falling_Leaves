@@ -62,9 +62,8 @@ def main():
     cf = params.initial_density * cl**3 / ct**2  # force scale
 
     fluid_field = LBMFlowField2D(params, device)
-    
+
     flags_np = np.zeros((nx, ny), dtype=np.int32)
-    
     # ---------------------------------------------------------
     # set boundary conditions (Outlet)
     # ---------------------------------------------------------
@@ -100,6 +99,50 @@ def main():
     )
 
     solid_solver.gravity = np.array(sim_cfg['gravity'], dtype=np.float32)
+    u_wind = fluid_cfg['crosswind_velocity']
+
+    # ==============================================================================
+    # Flow Field Pre-blowing
+    # ==============================================================================
+    PRE_BLOW_STEPS = 400 * 5
+    print(f"Pre-blowing fluid field with crosswind for {PRE_BLOW_STEPS} steps to reach steady state...")
+    
+    for _ in range(PRE_BLOW_STEPS):
+        wp.launch(
+            kernel=kernels.streaming_and_collision_kernel,
+            dim=(nx, ny),
+            inputs=[
+                fluid_field.moments_pre, 
+                fluid_field.moments_post, 
+                fluid_field.flags, 
+                fluid_field.fluid_force,
+
+                solid_solver.v_pos_gpu, 
+                solid_solver.v_vel_gpu, 
+                solid_solver.v_force_gpu, 
+                solid_solver.edges_gpu, 
+                solid_solver.num_boundary_edges,
+
+                nx, ny, 
+                fluid_field.omega, 
+                cl, ct, cf,
+            ],
+            device=device
+        )
+        fluid_field.swap_moments()
+        
+        wp.launch(
+            kernel=kernels.apply_outlet_inlet_kernel,
+            dim=(nx, ny),
+            inputs=[
+                fluid_field.moments_pre, 
+                fluid_field.flags, 
+                nx, ny,
+                u_wind],
+            device=device
+        )
+    
+    print("Fluid field stabilized. Releasing the leaf now!")
 
     # ==============================================================================
     # 3. visualization (Matplotlib)
@@ -163,13 +206,14 @@ def main():
             fluid_field.swap_moments()
             
             wp.launch(
-                kernel=kernels.apply_outlet_kernel,
+                kernel=kernels.apply_outlet_inlet_kernel,
                 dim=(nx, ny),
                 inputs=[
                     fluid_field.moments_pre,
                     fluid_field.flags,
                     nx, 
-                    ny
+                    ny,
+                    u_wind
                 ],
                 device=device
             )

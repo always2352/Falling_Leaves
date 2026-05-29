@@ -299,7 +299,8 @@ def apply_outlet_kernel(
     moments: wp.array(dtype=wp.float32, ndim=3),
     flags: wp.array(dtype=wp.int32, ndim=2),
     nx: wp.int32, 
-    ny: wp.int32
+    ny: wp.int32,
+    u_inlet: wp.float32
 ):
     """
     Applies outlet boundary conditions by extrapolating velocities from the interior 
@@ -308,7 +309,7 @@ def apply_outlet_kernel(
     Fluid = 0
     OutletUp = 3
     OutletDown = 4
-    OutletLeft = 5
+    InletLeft = 5
     OutletRight = 6
     """
     x, y = wp.tid()
@@ -336,7 +337,7 @@ def apply_outlet_kernel(
                     moments[x, y, 2] = down_vel
                 moments[x, y, 4] = down_vel * down_vel
 
-    # --- Outlet Left (Left Boundary) ---
+     # --- Outlet Left (Left Boundary) ---
     elif flag == 5: # OutletLeft
         if x + 1 < nx:
             if flags[x + 1, y] == 0:
@@ -344,6 +345,65 @@ def apply_outlet_kernel(
                 if left_vel < 0.0:
                     moments[x, y, 1] = left_vel
                 moments[x, y, 3] = left_vel * left_vel
+
+    # --- Outlet Right (Right Boundary) ---
+    elif flag == 6: # OutletRight
+        if x - 1 >= 0:
+            if flags[x - 1, y] == 0:
+                right_vel = moments[x - 1, y, 1] # Get ux from interior
+                if right_vel > 0.0:
+                    moments[x, y, 1] = right_vel
+                moments[x, y, 3] = right_vel * right_vel
+
+@wp.kernel
+def apply_outlet_inlet_kernel(
+    moments: wp.array(dtype=wp.float32, ndim=3),
+    flags: wp.array(dtype=wp.int32, ndim=2),
+    nx: wp.int32, 
+    ny: wp.int32,
+    u_inlet: wp.float32
+):
+    """
+    Applies outlet boundary conditions by extrapolating velocities from the interior 
+    fluid nodes to the outlet boundary nodes.
+    
+    Fluid = 0
+    OutletUp = 3
+    OutletDown = 4
+    InletLeft = 5
+    OutletRight = 6
+    """
+    x, y = wp.tid()
+
+    if x < 0 or x >= nx or y < 0 or y >= ny:
+        return
+
+    flag = flags[x, y]
+
+    # --- Outlet Up (Top Boundary) ---
+    if flag == 3: # OutletUp
+        if y - 1 >= 0:
+            if flags[x, y - 1] == 0: # Check if interior node is Fluid
+                up_vel = moments[x, y - 1, 2] # Get uy from interior
+                if up_vel > 0.0:
+                    moments[x, y, 2] = up_vel  # Set uy at outlet
+                moments[x, y, 4] = up_vel * up_vel # Set piyy approximation
+
+    # --- Outlet Down (Bottom Boundary) ---
+    elif flag == 4: # OutletDown
+        if y + 1 < ny:
+            if flags[x, y + 1] == 0:
+                down_vel = moments[x, y + 1, 2] # Get uy from interior
+                if down_vel < 0.0:
+                    moments[x, y, 2] = down_vel
+                moments[x, y, 4] = down_vel * down_vel
+
+    # --- REVISED: Inlet Left (Left Boundary) ---
+    elif flag == 5: # InletLeft
+        moments[x, y, 1] = u_inlet
+        moments[x, y, 2] = 0.0               
+        moments[x, y, 3] = u_inlet * u_inlet 
+        moments[x, y, 4] = 0.0
 
     # --- Outlet Right (Right Boundary) ---
     elif flag == 6: # OutletRight

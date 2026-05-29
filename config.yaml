@@ -4,16 +4,17 @@
 
 # 1. Physical Domain & LBM Grid Parameters
 simulation:
-  nx: 500
-  ny: 1000
-  dx_lbm: 0.01          # LBM unit length (m)
-  dt: 0.001             # LBM time step (s)
+  nx: 600
+  ny: 1200
+  dx_lbm: 0.01          # LBM unit length
+  dt: 0.001             # LBM time step
   gravity: [0.0, -9.81] # Gravity acceleration
 
 # 2. Fluid Parameters
 fluid:
   viscosity: 0.01       # Kinematic viscosity nu
   density: 1.0          # Initial fluid density
+  crosswind_velocity: 0.0
 
 # 3. Leaf Geometry & Mass Parameters
 leaf:
@@ -22,8 +23,8 @@ leaf:
   num_pts: 100          # Number of discrete surface points
   rho: 1.2              # Leaf density
   com_offset: [0.0, 0.0] # 2D Vector [x_offset, y_offset] relative to geometric center
-  initial_pos: [3.5, 8.0]
-  initial_rot_deg: 0.0
+  initial_pos: [3.5, 10.0]
+  initial_rot_deg: 75.0
 
 # 4. Visualization & Output Parameters
 output:
