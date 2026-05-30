@@ -169,7 +169,9 @@ class LeafRigidBody2D_Torch:
         self.v_force_gpu.zero_()
    
     def apply_forces_and_forward_rigid(self, dt):
-        self.v_force_global.copy_(self.v_force_gpu)
+        v_force_torch = wp.to_torch(self.v_force_gpu) 
+        self.v_force_global.copy_(v_force_torch)
+        
         self.sum_force_global = torch.sum(self.v_force_global, dim=0) + self.mass * self.gravity
 
         v_pos_global = self.get_global_vertices()
