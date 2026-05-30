@@ -87,11 +87,13 @@ class LeafRigidBody2D:
         self.angle += self.omega * dt
         
 class LeafRigidBody2D_Torch:
-    def __init__(self, device, a, b, num_pts, rho, initial_pos, initial_rot_deg):
+    def __init__(self, device, a, b, num_pts, rho, com_offset, initial_pos, initial_rot_deg):
         self.device = torch.device(device)
         self.rho = rho
         self.a = a
         self.b = b
+
+        self.com_offset = torch.tensor(com_offset, dtype=torch.float32, device=self.device)
         self.num_vertices = num_pts
         self.num_boundary_edges = num_pts
 
@@ -118,9 +120,10 @@ class LeafRigidBody2D_Torch:
 
     def _generate_ellipse(self):
         t = np.linspace(0, 2 * np.pi, self.num_vertices, endpoint=False)
-        v_rest_np = np.column_stack((self.a * np.cos(t), self.b * np.sin(t))).astype(np.float32)
+        x_local = self.a * torch.cos(t) - self.com_offset[0]
+        y_local = self.b * torch.sin(t) - self.com_offset[1]
 
-        self.v_rest = torch.tensor(v_rest_np, dtype=torch.float32, device=self.device)
+        self.v_rest = torch.stack((x_local, y_local), dim=1).to(torch.float32)
         self.v_pos_local = self.v_rest.clone()
 
         edges = [[i, (i + 1) % self.num_vertices] for i in range(self.num_vertices)]
@@ -130,7 +133,10 @@ class LeafRigidBody2D_Torch:
         area = np.pi * self.a * self.b
         self.mass = torch.tensor(self.rho * area, dtype=torch.float32, device=self.device)
         self.v_mass = torch.full((self.num_vertices,), self.mass / self.num_vertices, dtype=torch.float32, device=self.device)
-        self.inertia = torch.tensor(self.mass * (self.a**2 + self.b**2) / 4.0, dtype=torch.float32, device=self.device)
+        
+        i_geom = self.mass * (self.a**2 + self.b**2) / 4.0
+        offset_sq_distance = self.com_offset[0]**2 + self.com_offset[1]**2
+        self.inertia = i_geom + self.mass * offset_sq_distance
 
     def get_rotation_matrix(self):
         c, s = torch.cos(self.angle), torch.sin(self.angle)
