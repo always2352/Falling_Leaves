@@ -14,7 +14,7 @@ simulation:
 fluid:
   viscosity: 0.01       # Kinematic viscosity nu
   density: 1.0          # Initial fluid density
-  crosswind_velocity: 0.0
+  crosswind_velocity: 0.05
 
 # 3. Leaf Geometry & Mass Parameters
 leaf:
