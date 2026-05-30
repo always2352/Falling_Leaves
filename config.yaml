@@ -31,3 +31,11 @@ output:
   total_frames: 150     # Total number of frames to simulate and output
   substeps: 40          # Number of LBM physical substeps per frame
   output_dir: "output_frames"
+
+optimization:
+  epochs: 10
+  loss_weights:
+    x_transport: 1.0
+    y_drop: 0.25
+    omega_reg: 0.01
+    angle_reg: 0.0

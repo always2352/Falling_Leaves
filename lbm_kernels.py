@@ -249,8 +249,12 @@ def streaming_and_collision_kernel(
                 wp.atomic_add(solid_v_force, v1_idx, hit_u * force)
 
         if not is_blocked:
-            rho_src, ux_src, uy_src = moments_pre[isrc_per, jsrc_per, 0], moments_pre[isrc_per, jsrc_per, 1], moments_pre[isrc_per, jsrc_per, 2]
-            pixx_src, piyy_src, pixy_src = moments_pre[isrc_per, jsrc_per, 3], moments_pre[isrc_per, jsrc_per, 4], moments_pre[isrc_per, jsrc_per, 5]
+            rho_src = moments_pre[isrc_per, jsrc_per, 0]
+            ux_src = moments_pre[isrc_per, jsrc_per, 1]
+            uy_src = moments_pre[isrc_per, jsrc_per, 2]
+            pixx_src = moments_pre[isrc_per, jsrc_per, 3]
+            piyy_src = moments_pre[isrc_per, jsrc_per, 4]
+            pixy_src = moments_pre[isrc_per, jsrc_per, 5]
             f_incoming = calculate_f_dist_from_moments(rho_src, ux_src, uy_src, pixx_src, piyy_src, pixy_src, k)
             pop[k] = f_incoming
 

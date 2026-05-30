@@ -1,4 +1,3 @@
-import os
 import numpy as np
 import torch
 import warp as wp
@@ -99,25 +98,24 @@ class LeafRigidBody2D_Torch:
         self.device = torch.device(device_torch)
         self.device_wp = device_wp
 
-        self.rho = rho
-        self.a = a
-        self.b = b
-
-        self.com_offset = com_offset
+        self.rho = self._as_float_tensor(rho)
+        self.a = self._as_float_tensor(a)
+        self.b = self._as_float_tensor(b)
+        self.com_offset = self._as_float_tensor(com_offset)
         self.num_vertices = num_pts
         self.num_boundary_edges = num_pts
 
-        self.c_pos = torch.tensor(initial_pos, dtype=torch.float32, device=self.device)
+        self.c_pos = self._as_float_tensor(initial_pos)
         self.c_vel = torch.zeros(2, dtype=torch.float32, device=self.device)
-        self.angle = torch.tensor(np.deg2rad(initial_rot_deg), dtype=torch.float32, device=self.device)
-        self.omega = torch.tensor(0.0, dtype=torch.float32, device=self.device)
+        self.angle = self._as_float_tensor(initial_rot_deg) * (math.pi / 180.0)
+        self.omega = torch.zeros((), dtype=torch.float32, device=self.device)
 
         self._generate_ellipse()
         self._compute_mass_properties()
 
         self.v_force_global = torch.zeros((self.num_vertices, 2), dtype=torch.float32, device=self.device)
         self.sum_force_global = torch.zeros(2, dtype=torch.float32, device=self.device)
-        self.sum_torque = torch.tensor(0.0, dtype=torch.float32, device=self.device)
+        self.sum_torque = torch.zeros((), dtype=torch.float32, device=self.device)
         self.gravity = torch.zeros(2, dtype=torch.float32, device=self.device)
 
         self.v_pos_gpu = wp.zeros(shape=(self.num_vertices,), dtype=wp.vec2, device=self.device_wp)
@@ -126,6 +124,11 @@ class LeafRigidBody2D_Torch:
         self.edges_gpu = wp.array(self.boundary_edges.flatten(), dtype=wp.int32, device=self.device_wp)
 
         self.update_gpu_buffers()
+
+    def _as_float_tensor(self, value):
+        if isinstance(value, torch.Tensor):
+            return value.to(device=self.device, dtype=torch.float32)
+        return torch.tensor(value, dtype=torch.float32, device=self.device)
 
     def _generate_ellipse(self):
         t = torch.linspace(0, 2 * math.pi, self.num_vertices + 1, device=self.device)[:-1]
@@ -139,9 +142,11 @@ class LeafRigidBody2D_Torch:
         self.boundary_edges = np.array(edges, dtype=np.int32)
 
     def _compute_mass_properties(self):
-        area = np.pi * self.a * self.b
-        self.mass = torch.tensor(self.rho * area, dtype=torch.float32, device=self.device)
-        self.v_mass = torch.full((self.num_vertices,), self.mass / self.num_vertices, dtype=torch.float32, device=self.device)
+        area = math.pi * self.a * self.b
+        self.mass = self.rho * area
+        self.v_mass = torch.ones((self.num_vertices,), dtype=torch.float32, device=self.device) * (
+            self.mass / self.num_vertices
+        )
         
         i_geom = self.mass * (self.a**2 + self.b**2) / 4.0
         offset_sq_distance = self.com_offset[0]**2 + self.com_offset[1]**2
@@ -158,22 +163,22 @@ class LeafRigidBody2D_Torch:
         R = self.get_rotation_matrix()
         return (R @ self.v_pos_local.T).T + self.c_pos
 
-    def update_gpu_buffers(self):
-        v_pos_global = self.get_global_vertices()
-
+    def get_boundary_kinematics(self):
         R = self.get_rotation_matrix()
+        v_pos_global = (R @ self.v_pos_local.T).T + self.c_pos
 
         v_rot_local = torch.zeros_like(self.v_pos_local)
         v_rot_local[:, 0] = -self.omega * self.v_pos_local[:, 1]
         v_rot_local[:, 1] = self.omega * self.v_pos_local[:, 0]
         v_vel_global = self.c_vel + (R @ v_rot_local.T).T
 
-        # if directly copied from v_pos, transform into wp - graph conflict!
-        v_pos_detached = v_pos_global.detach().contiguous()
-        v_vel_detached = v_vel_global.detach().contiguous()
+        return v_pos_global, v_vel_global
 
-        self.v_pos_gpu.assign(wp.from_torch(v_pos_detached.contiguous(), dtype=wp.vec2))
-        self.v_vel_gpu.assign(wp.from_torch(v_vel_detached.contiguous(), dtype=wp.vec2))
+    def update_gpu_buffers(self):
+        # These staging buffers are only for non-differentiable Warp launches.
+        v_pos_global, v_vel_global = self.get_boundary_kinematics()
+        self.v_pos_gpu.assign(wp.from_torch(v_pos_global.detach().contiguous(), dtype=wp.vec2))
+        self.v_vel_gpu.assign(wp.from_torch(v_vel_global.detach().contiguous(), dtype=wp.vec2))
         self.v_force_gpu.zero_()
    
     def apply_forces_and_forward_rigid(self, v_force_torch_input, dt):
@@ -186,8 +191,13 @@ class LeafRigidBody2D_Torch:
 
         self.sum_torque = torch.sum(r[:, 0] * self.v_force_global[:, 1] - r[:, 1] * self.v_force_global[:, 0])
 
-        self.c_vel += (self.sum_force_global / self.mass) * dt
-        self.c_pos += self.c_vel * dt
+        new_c_vel = self.c_vel + (self.sum_force_global / self.mass) * dt
+        new_c_pos = self.c_pos + new_c_vel * dt
 
-        self.omega += (self.sum_torque / self.inertia) * dt
-        self.angle += self.omega * dt
+        new_omega = self.omega + (self.sum_torque / self.inertia) * dt
+        new_angle = self.angle + new_omega * dt
+
+        self.c_vel = new_c_vel
+        self.c_pos = new_c_pos
+        self.omega = new_omega
+        self.angle = new_angle

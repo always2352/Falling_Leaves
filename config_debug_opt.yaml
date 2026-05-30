@@ -1,0 +1,34 @@
+simulation:
+  nx: 24
+  ny: 48
+  dx_lbm: 0.01
+  dt: 0.001
+  gravity: [0.0, -9.81]
+  pre_blow_steps: 5
+
+fluid:
+  viscosity: 0.01
+  density: 1.0
+  crosswind_velocity: 0.01
+
+leaf:
+  a: 0.5
+  aspect_ratio: 5.0
+  num_pts: 32
+  rho: 1.2
+  com_offset: [0.0, 0.0]
+  initial_pos: [0.12, 0.24]
+  initial_rot_deg: 30.0
+
+output:
+  total_frames: 4
+  substeps: 5
+  output_dir: "output_debug_opt"
+
+optimization:
+  epochs: 1
+  loss_weights:
+    x_transport: 1.0
+    y_drop: 0.25
+    omega_reg: 0.01
+    angle_reg: 0.0
