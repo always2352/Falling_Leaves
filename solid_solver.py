@@ -4,15 +4,15 @@ import torch
 import warp as wp
 
 class LeafRigidBody2D:
-    def __init__(self, device, a, b, num_pts, rho, initial_pos, initial_rot_deg):
+    def __init__(self, device, a, b, num_pts, rho, com_offset, initial_pos, initial_rot_deg):
         self.device = device
         self.rho = rho
         self.a = a
         self.b = b
+        self.com_offset = np.array(com_offset, dtype=np.float32)
         self.num_vertices = num_pts
         self.num_boundary_edges = num_pts
 
-        # 3 DOFs: x, y, theta
         self.c_pos = np.array(initial_pos, dtype=np.float32)
         self.c_vel = np.zeros(2, dtype=np.float32)
         self.angle = np.deg2rad(initial_rot_deg)
@@ -35,7 +35,10 @@ class LeafRigidBody2D:
 
     def _generate_ellipse(self):
         t = np.linspace(0, 2 * np.pi, self.num_vertices, endpoint=False)
-        self.v_rest = np.column_stack((self.a * np.cos(t), self.b * np.sin(t))).astype(np.float32)
+        x_local = self.a * np.cos(t) - self.com_offset[0]
+        y_local = self.b * np.sin(t) - self.com_offset[1]
+
+        self.v_rest = np.column_stack((x_local, y_local)).astype(np.float32)
         self.v_pos_local = self.v_rest.copy()
 
         edges = [[i, (i + 1) % self.num_vertices] for i in range(self.num_vertices)]
@@ -45,9 +48,14 @@ class LeafRigidBody2D:
         area = np.pi * self.a * self.b
         self.mass = self.rho * area
 
-        # mass is evenly distributed on the boundary node?
+        # mass is evenly distributed on the boundary node
         self.v_mass = np.full(self.num_vertices, self.mass / self.num_vertices, dtype=np.float32)
         self.inertia = self.mass * (self.a**2 + self.b**2) / 4.0
+
+        # Parallel Axis Theorem
+        i_geom = self.mass * (self.a**2 + self.b**2) / 4.0
+        offset_sq_distance = self.com_offset[0]**2 + self.com_offset[1]**2
+        self.inertia = i_geom + self.mass * offset_sq_distance
 
     def get_rotation_matrix(self):
         c, s = np.cos(self.angle), np.sin(self.angle)
@@ -60,6 +68,7 @@ class LeafRigidBody2D:
     def update_gpu_buffers(self):
         R = self.get_rotation_matrix()
         v_pos_global = (R @ self.v_pos_local.T).T + self.c_pos
+
         v_rot_local = np.zeros_like(self.v_pos_local)
         v_rot_local[:, 0] = -self.omega * self.v_pos_local[:, 1]
         v_rot_local[:, 1] = self.omega * self.v_pos_local[:, 0]
@@ -72,9 +81,6 @@ class LeafRigidBody2D:
     def apply_forces_and_forward_rigid(self, dt):
         self.v_force_global = self.v_force_gpu.numpy()
         self.sum_force_global = np.sum(self.v_force_global, axis=0) + self.mass * self.gravity
-       
-        R_T = self.get_rotation_matrix().T
-        sum_torque_local = 0.0
 
         v_pos_global = self.get_global_vertices()
         r = v_pos_global - self.c_pos
