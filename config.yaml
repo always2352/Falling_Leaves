@@ -19,7 +19,7 @@ fluid:
 # 3. Leaf Geometry & Mass Parameters
 leaf:
   a: 0.5                # Semi-major axis of the ellipse (half chord length)
-  aspect_ratio: 10.0    # Aspect ratio (a/b)
+  aspect_ratio: 5.0    # Aspect ratio (a/b)
   num_pts: 100          # Number of discrete surface points
   rho: 1.2              # Leaf density
   com_offset: [0.0, 0.0] # 2D Vector [x_offset, y_offset] relative to geometric center
